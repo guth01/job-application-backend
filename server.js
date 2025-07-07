@@ -12,6 +12,7 @@ const errorHandler = require('./middlewares/error');
 
 // Route imports
 const authRoutes = require('./routes/auth');
+const userRoutes = require('./routes/user');
 
 const app = express();
 
@@ -36,6 +37,10 @@ app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+
+// Serve static files (uploaded files)
+app.use('/api/uploads', express.static('uploads'));
 
 // Health check route
 app.get('/api/health', (req, res) => {
