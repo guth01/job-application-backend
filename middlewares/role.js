@@ -1,79 +1,45 @@
-// Middleware to check if user has required role
+const Job = require('../models/job');
+
+// Generic middleware factory to check for required roles
 const requireRole = (allowedRoles) => {
+  // Convert single role to an array if needed
+  const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
+
   return (req, res, next) => {
-    if (!req.user) {
-      return res.status(401).json({
-        status: 'error',
-        message: 'Authentication required'
-      });
+    if (req.user && roles.includes(req.user.role)) {
+      return next();
     }
-
-    // Convert single role to array
-    const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
-
-    if (!roles.includes(req.user.role)) {
-      return res.status(403).json({
-        status: 'error',
-        message: 'Insufficient permissions'
-      });
-    }
-
-    next();
+    res.status(403).json({
+      status: 'error',
+      message: `Forbidden: This action requires one of the following roles: ${roles.join(', ')}.`
+    });
   };
 };
 
-// Specific role middleware functions
-const requireApplicant = requireRole('applicant');
-const requireEmployer = requireRole('employer');
-const requireAny = requireRole(['applicant', 'employer']);
+// Middleware to check if the logged-in user is the owner of a specific job
+const checkJobOwnership = async (req, res, next) => {
+  try {
+    const job = await Job.findById(req.params.id);
 
-// Middleware to check if user is accessing their own resources
-const requireOwnership = (req, res, next) => {
-  const resourceUserId = req.params.userId || req.body.userId;
-  
-  if (!resourceUserId) {
-    return next(); // No specific user resource being accessed
+    if (!job) {
+      return res.status(404).json({ status: 'error', message: 'Job not found' });
+    }
+
+    // Using .equals() is the robust Mongoose way to compare an ObjectId with a string.
+    if (!job.employerId.equals(req.user.userId)) {
+      return res.status(403).json({ status: 'error', message: 'Forbidden: You are not authorized to modify this job.' });
+    }
+
+    // Attach the found job to the request to prevent another DB call in the controller
+    req.job = job;
+    next();
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: 'Internal server error' });
   }
-
-  if (req.user.userId.toString() !== resourceUserId.toString()) {
-    return res.status(403).json({
-      status: 'error',
-      message: 'You can only access your own resources'
-    });
-  }
-
-  next();
-};
-
-// Middleware to check if user can access resource (owner or admin)
-const requireOwnershipOrAdmin = (req, res, next) => {
-  const resourceUserId = req.params.userId || req.body.userId;
-  
-  if (!resourceUserId) {
-    return next(); // No specific user resource being accessed
-  }
-
-  // Allow access if user is accessing their own resources
-  if (req.user.userId.toString() === resourceUserId.toString()) {
-    return next();
-  }
-
-  // For future admin functionality
-  if (req.user.role === 'admin') {
-    return next();
-  }
-
-  return res.status(403).json({
-    status: 'error',
-    message: 'You can only access your own resources'
-  });
 };
 
 module.exports = {
-  requireRole,
-  requireApplicant,
-  requireEmployer,
-  requireAny,
-  requireOwnership,
-  requireOwnershipOrAdmin
+  requireApplicant: requireRole('applicant'),
+  requireEmployer: requireRole('employer'),
+  checkJobOwnership
 };
