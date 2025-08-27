@@ -14,6 +14,7 @@ const errorHandler = require('./middlewares/error');
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/user');
 const jobRoutes = require('./routes/job');
+const applicationRoutes = require('./routes/application');
 
 const app = express();
 
@@ -40,6 +41,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/jobs', jobRoutes);
+app.use('/api/applications', applicationRoutes);
 
 // Serve static files (uploaded files)
 app.use('/api/uploads', express.static('uploads'));
