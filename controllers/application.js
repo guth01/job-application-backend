@@ -1,6 +1,7 @@
 const Application = require('../models/application');
 const Job = require('../models/job');
 const User = require('../models/user');
+const queueService = require('../services/queue_service');
 
 class ApplicationController {
 
@@ -13,8 +14,8 @@ class ApplicationController {
       const applicantId = req.user.userId;
       const { jobId } = req.params;
 
-      // Check if job exists and is active
-      const job = await Job.findById(jobId);
+      // Check if job exists and is active - populate employer info for email
+      const job = await Job.findById(jobId).populate('employerId', 'email firstName lastName');
       if (!job || !job.isActive) {
         return res.status(404).json({ status: 'error', message: 'Job not found or is no longer active' });
       }
@@ -43,6 +44,28 @@ class ApplicationController {
       });
 
       await application.save();
+
+      // Enqueue email notifications (non-blocking)
+      try {
+        // Send notification to employer
+        await queueService.sendApplicationNotification({
+          employerEmail: job.employerId.email,
+          jobTitle: job.title,
+          applicantName: `${applicant.firstName} ${applicant.lastName}`
+        });
+
+        // Send confirmation to applicant
+        await queueService.sendApplicationConfirmation({
+          applicantEmail: applicant.email,
+          jobTitle: job.title,
+          companyName: job.company
+        });
+
+        console.log('Email notifications enqueued successfully');
+      } catch (queueError) {
+        // Log error but don't fail the request
+        console.error('Error enqueueing email notifications:', queueError);
+      }
 
       res.status(201).json({
         status: 'success',
